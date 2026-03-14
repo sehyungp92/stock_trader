@@ -178,7 +178,7 @@ class ProcessScorer:
             negative.append("Manual exit")
             evidence.append("exit_reason=MANUAL")
 
-        if exit_reason == "STOP_LOSS" and entry_slippage is not None:
+        if exit_reason == "STOP_LOSS":
             atr = trade.get("atr_at_entry")
             strategy_params = trade.get("strategy_params_at_entry", {})
             sl_mult = strategy_params.get("sl_atr_multiplier") or strategy_params.get("sl_atr_mult")
@@ -191,6 +191,12 @@ class ProcessScorer:
 
         # --- FINAL CLASSIFICATION ---
         score = max(0, min(100, score))
+
+        if score >= 100 and not negative:
+            if "good_execution" not in root_causes:
+                root_causes.append("good_execution")
+                positive.append("Perfect process execution — no deductions applied")
+                evidence.append("score=100, negative_factors=[]")
 
         if score >= 80:
             if pnl and pnl > 0:

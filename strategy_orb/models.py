@@ -160,6 +160,7 @@ class PositionState:
     stop_order_id: str = ""
     trade_id: str = ""
     realized_pnl_usd: float = 0.0
+    entry_commission: float = 0.0
 
     @property
     def total_initial_risk_usd(self) -> float:

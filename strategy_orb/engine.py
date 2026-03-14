@@ -866,40 +866,70 @@ class USORBEngine:
     async def _submit_stop(self, ctx: SymbolContext) -> None:
         if ctx.position is None or ctx.position.qty_open <= 0:
             return
-        order = build_stop_order(ctx, self._account_id, ctx.position.qty_open, ctx.position.current_stop)
-        receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
-        if receipt.oms_order_id:
-            ctx.position.stop_order_id = receipt.oms_order_id
-            self._order_index[receipt.oms_order_id] = (ctx.symbol, "STOP")
-            self._log_order_event(
-                order_id=receipt.oms_order_id,
-                symbol=ctx.symbol,
-                status="SUBMITTED",
-                requested_qty=ctx.position.qty_open,
-                order_type="STOP",
-                requested_price=ctx.position.current_stop,
-            )
+        try:
+            order = build_stop_order(ctx, self._account_id, ctx.position.qty_open, ctx.position.current_stop)
+            receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
+            if receipt.oms_order_id:
+                ctx.position.stop_order_id = receipt.oms_order_id
+                self._order_index[receipt.oms_order_id] = (ctx.symbol, "STOP")
+                self._log_order_event(
+                    order_id=receipt.oms_order_id,
+                    symbol=ctx.symbol,
+                    status="SUBMITTED",
+                    requested_qty=ctx.position.qty_open,
+                    order_type="STOP",
+                    requested_price=ctx.position.current_stop,
+                )
+        except Exception as exc:
+            logger.error("submit_stop failed for %s: %s", ctx.symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="submit_stop_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": ctx.symbol},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _replace_stop(self, ctx: SymbolContext) -> None:
         if ctx.position is None or not ctx.position.stop_order_id:
             return
-        await self._oms.submit_intent(
-            Intent(
-                intent_type=IntentType.REPLACE_ORDER,
-                strategy_id=STRATEGY_ID,
-                target_oms_order_id=ctx.position.stop_order_id,
-                new_qty=ctx.position.qty_open,
-                new_stop_price=ctx.position.current_stop,
+        try:
+            await self._oms.submit_intent(
+                Intent(
+                    intent_type=IntentType.REPLACE_ORDER,
+                    strategy_id=STRATEGY_ID,
+                    target_oms_order_id=ctx.position.stop_order_id,
+                    new_qty=ctx.position.qty_open,
+                    new_stop_price=ctx.position.current_stop,
+                )
             )
-        )
-        self._log_order_event(
-            order_id=ctx.position.stop_order_id,
-            symbol=ctx.symbol,
-            status="REPLACE_REQUESTED",
-            requested_qty=ctx.position.qty_open,
-            order_type="STOP",
-            requested_price=ctx.position.current_stop,
-        )
+            self._log_order_event(
+                order_id=ctx.position.stop_order_id,
+                symbol=ctx.symbol,
+                status="REPLACE_REQUESTED",
+                requested_qty=ctx.position.qty_open,
+                order_type="STOP",
+                requested_price=ctx.position.current_stop,
+            )
+        except Exception as exc:
+            logger.error("replace_stop failed for %s: %s", ctx.symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="replace_stop_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": ctx.symbol},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _cancel_stop(self, ctx: SymbolContext) -> None:
         if ctx.position and ctx.position.stop_order_id:
@@ -931,33 +961,48 @@ class USORBEngine:
             expected_exit_price = float(ctx.quote.bid or ctx.last_price or 0.0)
         elif ctx.last_price is not None:
             expected_exit_price = float(ctx.last_price)
-        order = build_market_exit(ctx, self._account_id, requested_qty, role)
-        receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
-        if receipt.oms_order_id:
-            ctx.exit_order = PendingOrderState(
-                oms_order_id=receipt.oms_order_id,
-                submitted_at=datetime.now(timezone.utc),
-                role=role.value,
-                requested_qty=requested_qty,
-                limit_price=expected_exit_price if expected_exit_price > 0 else None,
-            )
-            self._order_index[receipt.oms_order_id] = (ctx.symbol, role.value)
-            if expected_exit_price > 0:
-                self._exit_price_hints[receipt.oms_order_id] = expected_exit_price
-            self._log_order_event(
-                order_id=receipt.oms_order_id,
-                symbol=ctx.symbol,
-                status="SUBMITTED",
-                requested_qty=requested_qty,
-                order_type="MARKET_EXIT",
-                requested_price=expected_exit_price if expected_exit_price > 0 else None,
-                related_trade_id=ctx.position.trade_id if ctx.position else "",
-            )
-            self._log_orderbook_context(
-                ctx=ctx,
-                trade_context="exit",
-                related_trade_id=ctx.position.trade_id if ctx.position else "",
-            )
+        try:
+            order = build_market_exit(ctx, self._account_id, requested_qty, role)
+            receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
+            if receipt.oms_order_id:
+                ctx.exit_order = PendingOrderState(
+                    oms_order_id=receipt.oms_order_id,
+                    submitted_at=datetime.now(timezone.utc),
+                    role=role.value,
+                    requested_qty=requested_qty,
+                    limit_price=expected_exit_price if expected_exit_price > 0 else None,
+                )
+                self._order_index[receipt.oms_order_id] = (ctx.symbol, role.value)
+                if expected_exit_price > 0:
+                    self._exit_price_hints[receipt.oms_order_id] = expected_exit_price
+                self._log_order_event(
+                    order_id=receipt.oms_order_id,
+                    symbol=ctx.symbol,
+                    status="SUBMITTED",
+                    requested_qty=requested_qty,
+                    order_type="MARKET_EXIT",
+                    requested_price=expected_exit_price if expected_exit_price > 0 else None,
+                    related_trade_id=ctx.position.trade_id if ctx.position else "",
+                )
+                self._log_orderbook_context(
+                    ctx=ctx,
+                    trade_context="exit",
+                    related_trade_id=ctx.position.trade_id if ctx.position else "",
+                )
+        except Exception as exc:
+            logger.error("submit_market_exit failed for %s: %s", ctx.symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="submit_market_exit_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": ctx.symbol, "qty": requested_qty, "role": role.value},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _cancel_order(self, oms_order_id: str) -> None:
         symbol, role = self._resolve_order(oms_order_id, {})
@@ -1087,6 +1132,22 @@ class USORBEngine:
                                 if entry_order and entry_order.limit_price is not None
                                 else (ctx.planned_limit or ctx.planned_entry)
                             ),
+                            "concurrent_positions": self._portfolio.open_positions,
+                            "drawdown_pct": self._portfolio.total_pnl_pct,
+                            "bar_id": f"{ctx.symbol}:{event.timestamp.strftime('%Y%m%dT%H%M%S')}",
+                            "entry_latency_ms": (
+                                int((event.timestamp - entry_order.submitted_at).total_seconds() * 1000)
+                                if entry_order and entry_order.submitted_at
+                                else None
+                            ),
+                            "execution_timestamps": {
+                                "order_submitted_at": (
+                                    entry_order.submitted_at.isoformat()
+                                    if entry_order and entry_order.submitted_at
+                                    else None
+                                ),
+                                "fill_received_at": event.timestamp.isoformat(),
+                            },
                         },
                         account_id=self._account_id,
                     )
@@ -1096,6 +1157,7 @@ class USORBEngine:
                         related_trade_id=ctx.position.trade_id,
                         exchange_timestamp=event.timestamp,
                     )
+                ctx.position.entry_commission = float(payload.get("commission", 0.0) or 0.0)
             else:
                 total_cost = (ctx.position.entry_price * ctx.position.qty_open) + (fill_price * fill_qty)
                 ctx.position.qty_entry += fill_qty
@@ -1117,6 +1179,7 @@ class USORBEngine:
         if ctx.position is None:
             return
 
+        exit_order = ctx.exit_order
         if ctx.exit_order and event.oms_order_id == ctx.exit_order.oms_order_id:
             ctx.exit_order = None
 
@@ -1167,6 +1230,13 @@ class USORBEngine:
                     meta={
                         "exchange_timestamp": event.timestamp,
                         "expected_exit_price": expected_exit_price or fill_price,
+                        "fees_paid": float(payload.get("commission", 0.0) or 0.0) + getattr(ctx.position, 'entry_commission', 0.0),
+                        "session_transitions": [],
+                        "exit_latency_ms": (
+                            int((event.timestamp - exit_order.submitted_at).total_seconds() * 1000)
+                            if exit_order and exit_order.submitted_at
+                            else None
+                        ),
                     },
                 )
             self._log_orderbook_context(

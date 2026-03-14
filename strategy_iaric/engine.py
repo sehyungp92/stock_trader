@@ -833,43 +833,73 @@ class IARICEngine:
         item = self._items[symbol]
         if state.position is None or state.position.qty_open <= 0 or state.position.stop_order_id:
             return
-        order = build_stop_order(item, self._account_id, state.position.qty_open, state.position.current_stop)
-        receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
-        if receipt.oms_order_id:
-            state.position.stop_order_id = receipt.oms_order_id
-            self._order_index[receipt.oms_order_id] = (symbol, "STOP")
-            self._diagnostics.log_order(symbol, "submit_stop", {"qty": state.position.qty_open, "stop_price": state.position.current_stop})
-            self._log_order_event(
-                order_id=receipt.oms_order_id,
-                symbol=symbol,
-                status="SUBMITTED",
-                requested_qty=state.position.qty_open,
-                order_type="STOP",
-                requested_price=state.position.current_stop,
-            )
+        try:
+            order = build_stop_order(item, self._account_id, state.position.qty_open, state.position.current_stop)
+            receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
+            if receipt.oms_order_id:
+                state.position.stop_order_id = receipt.oms_order_id
+                self._order_index[receipt.oms_order_id] = (symbol, "STOP")
+                self._diagnostics.log_order(symbol, "submit_stop", {"qty": state.position.qty_open, "stop_price": state.position.current_stop})
+                self._log_order_event(
+                    order_id=receipt.oms_order_id,
+                    symbol=symbol,
+                    status="SUBMITTED",
+                    requested_qty=state.position.qty_open,
+                    order_type="STOP",
+                    requested_price=state.position.current_stop,
+                )
+        except Exception as exc:
+            logger.error("submit_stop failed for %s: %s", symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="submit_stop_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": symbol},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _replace_stop(self, symbol: str) -> None:
         state = self._symbols[symbol]
         if state.position is None or not state.position.stop_order_id:
             return
-        await self._oms.submit_intent(
-            Intent(
-                intent_type=IntentType.REPLACE_ORDER,
-                strategy_id=STRATEGY_ID,
-                target_oms_order_id=state.position.stop_order_id,
-                new_qty=state.position.qty_open,
-                new_stop_price=state.position.current_stop,
+        try:
+            await self._oms.submit_intent(
+                Intent(
+                    intent_type=IntentType.REPLACE_ORDER,
+                    strategy_id=STRATEGY_ID,
+                    target_oms_order_id=state.position.stop_order_id,
+                    new_qty=state.position.qty_open,
+                    new_stop_price=state.position.current_stop,
+                )
             )
-        )
-        self._diagnostics.log_order(symbol, "replace_stop", {"qty": state.position.qty_open, "stop_price": state.position.current_stop})
-        self._log_order_event(
-            order_id=state.position.stop_order_id,
-            symbol=symbol,
-            status="REPLACE_REQUESTED",
-            requested_qty=state.position.qty_open,
-            order_type="STOP",
-            requested_price=state.position.current_stop,
-        )
+            self._diagnostics.log_order(symbol, "replace_stop", {"qty": state.position.qty_open, "stop_price": state.position.current_stop})
+            self._log_order_event(
+                order_id=state.position.stop_order_id,
+                symbol=symbol,
+                status="REPLACE_REQUESTED",
+                requested_qty=state.position.qty_open,
+                order_type="STOP",
+                requested_price=state.position.current_stop,
+            )
+        except Exception as exc:
+            logger.error("replace_stop failed for %s: %s", symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="replace_stop_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": symbol},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _cancel_stop(self, symbol: str) -> None:
         state = self._symbols[symbol]
@@ -890,32 +920,47 @@ class IARICEngine:
         expected_exit_price = 0.0
         if market is not None:
             expected_exit_price = float(market.bid or market.last_price or 0.0)
-        order = build_market_exit(item, self._account_id, requested_qty, role)
-        receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
-        if receipt.oms_order_id:
-            state.exit_order = PendingOrderState(
-                oms_order_id=receipt.oms_order_id,
-                submitted_at=datetime.now(timezone.utc),
-                role=role.value,
-                requested_qty=requested_qty,
-                limit_price=expected_exit_price if expected_exit_price > 0 else None,
-            )
-            self._order_index[receipt.oms_order_id] = (symbol, role.value)
-            self._diagnostics.log_order(symbol, "submit_exit", {"qty": requested_qty, "role": role.value})
-            self._log_order_event(
-                order_id=receipt.oms_order_id,
-                symbol=symbol,
-                status="SUBMITTED",
-                requested_qty=requested_qty,
-                order_type="MARKET_EXIT",
-                requested_price=expected_exit_price if expected_exit_price > 0 else None,
-                related_trade_id=position.trade_id if position else "",
-            )
-            self._log_orderbook_context(
-                symbol=symbol,
-                trade_context="exit",
-                related_trade_id=position.trade_id if position else "",
-            )
+        try:
+            order = build_market_exit(item, self._account_id, requested_qty, role)
+            receipt = await self._oms.submit_intent(Intent(intent_type=IntentType.NEW_ORDER, strategy_id=STRATEGY_ID, order=order))
+            if receipt.oms_order_id:
+                state.exit_order = PendingOrderState(
+                    oms_order_id=receipt.oms_order_id,
+                    submitted_at=datetime.now(timezone.utc),
+                    role=role.value,
+                    requested_qty=requested_qty,
+                    limit_price=expected_exit_price if expected_exit_price > 0 else None,
+                )
+                self._order_index[receipt.oms_order_id] = (symbol, role.value)
+                self._diagnostics.log_order(symbol, "submit_exit", {"qty": requested_qty, "role": role.value})
+                self._log_order_event(
+                    order_id=receipt.oms_order_id,
+                    symbol=symbol,
+                    status="SUBMITTED",
+                    requested_qty=requested_qty,
+                    order_type="MARKET_EXIT",
+                    requested_price=expected_exit_price if expected_exit_price > 0 else None,
+                    related_trade_id=position.trade_id if position else "",
+                )
+                self._log_orderbook_context(
+                    symbol=symbol,
+                    trade_context="exit",
+                    related_trade_id=position.trade_id if position else "",
+                )
+        except Exception as exc:
+            logger.error("submit_market_exit failed for %s: %s", symbol, exc, exc_info=exc)
+            if self._instrumentation:
+                try:
+                    self._instrumentation.log_error(
+                        error_type="submit_market_exit_failed",
+                        message=str(exc),
+                        severity="high",
+                        category="engine",
+                        context={"symbol": symbol, "qty": requested_qty, "role": role.value},
+                        exc=exc,
+                    )
+                except Exception:
+                    pass
 
     async def _cancel_order(self, oms_order_id: str) -> None:
         symbol, role = self._resolve_order(oms_order_id, {})
@@ -1119,9 +1164,26 @@ class IARICEngine:
                         "session_type": self._current_session_type(event.timestamp),
                         "exchange_timestamp": event.timestamp,
                         "expected_entry_price": entry_order.limit_price if entry_order else fill_price,
+                        "concurrent_positions": len(self._portfolio.open_positions),
+                        "drawdown_pct": getattr(self._portfolio, 'total_pnl_pct', None),
+                        "bar_id": f"{symbol}:{event.timestamp.strftime('%Y%m%dT%H%M%S')}",
+                        "entry_latency_ms": (
+                            int((event.timestamp - entry_order.submitted_at).total_seconds() * 1000)
+                            if entry_order and entry_order.submitted_at
+                            else None
+                        ),
+                        "execution_timestamps": {
+                            "order_submitted_at": (
+                                entry_order.submitted_at.isoformat()
+                                if entry_order and entry_order.submitted_at
+                                else None
+                            ),
+                            "fill_received_at": event.timestamp.isoformat(),
+                        },
                     },
                     account_id=self._account_id,
                 )
+            position.entry_commission = float(payload.get("commission", 0.0) or 0.0)
             self._log_orderbook_context(
                 symbol=symbol,
                 trade_context="entry",
@@ -1184,7 +1246,13 @@ class IARICEngine:
                             if exit_order and exit_order.limit_price is not None
                             else fill_price
                         ),
+                        "fees_paid": float(payload.get("commission", 0.0) or 0.0) + getattr(position, 'entry_commission', 0.0),
                         "session_transitions": [state.last_transition_reason] if state.last_transition_reason else [],
+                        "exit_latency_ms": (
+                            int((event.timestamp - exit_order.submitted_at).total_seconds() * 1000)
+                            if exit_order and exit_order.submitted_at
+                            else None
+                        ),
                     },
                 )
             self._log_orderbook_context(

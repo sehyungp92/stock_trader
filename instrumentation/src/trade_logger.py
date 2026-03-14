@@ -294,6 +294,13 @@ class TradeLogger:
                 stage="entry",
             )
 
+            # Assemble entry fill details for FillQualityAnalyzer
+            trade.entry_fill_details = {
+                "slippage_bps": round(entry_slippage_bps, 2) if entry_slippage_bps is not None else None,
+                "fill_latency_ms": entry_latency_ms,
+                "fill_type": "limit",
+            }
+
             # Compute param_set_id hash for efficient grouping
             if strategy_params:
                 params_str = json.dumps(strategy_params, sort_keys=True, default=str)
@@ -356,6 +363,13 @@ class TradeLogger:
             trade.expected_exit_price = expected_exit_price
             trade.exit_slippage_bps = round(exit_slippage_bps, 2) if exit_slippage_bps else None
             trade.exit_latency_ms = exit_latency_ms
+
+            # Assemble exit fill details for FillQualityAnalyzer
+            trade.exit_fill_details = {
+                "slippage_bps": round(exit_slippage_bps, 2) if exit_slippage_bps is not None else None,
+                "fill_latency_ms": exit_latency_ms,
+                "fill_type": "stop" if exit_reason in ("STOP_LOSS", "STOP") else "market",
+            }
 
             # MFE/MAE fields (Gap G1, B5)
             trade.mfe_r = round(mfe_r, 4) if mfe_r is not None else None
