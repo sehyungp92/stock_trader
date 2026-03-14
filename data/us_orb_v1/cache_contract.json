@@ -1,0 +1,29 @@
+{
+  "format": "jsonl",
+  "version": 1,
+  "required_fields": [
+    "symbol",
+    "exchange",
+    "primary_exchange",
+    "currency",
+    "tick_size",
+    "point_value",
+    "adv20",
+    "prior_close",
+    "sma20",
+    "sma60",
+    "sma20_slope",
+    "atr1m14",
+    "opening_value15_baseline_0935_0950",
+    "minute_volume_baseline_0935_1115"
+  ],
+  "optional_fields": [
+    "sector",
+    "float_shares",
+    "float_bucket",
+    "catalyst_tag",
+    "luld_tier",
+    "tech_tag",
+    "secondary_universe"
+  ]
+}

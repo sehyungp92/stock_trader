@@ -16,6 +16,9 @@ venv/
 .env
 .env.*
 
+# Claude Code
+.claude/
+
 # IDE
 .vscode/
 .idea/
@@ -27,7 +30,6 @@ venv/
 Thumbs.db
 
 # Data & docs
-data/
 docs/
 _references/
 
