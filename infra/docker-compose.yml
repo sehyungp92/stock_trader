@@ -16,7 +16,7 @@ services:
       STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT: ${STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT:-50}
       INSTRUMENTATION_DATA_DIR: /app/instrumentation/data
       INSTRUMENTATION_RELAY_URL: ${INSTRUMENTATION_RELAY_URL:-http://host.docker.internal:8001/events}
-      INSTRUMENTATION_HMAC_SECRET_IARIC: ${INSTRUMENTATION_HMAC_SECRET_IARIC:-}
+      INSTRUMENTATION_HMAC_SECRET: ${INSTRUMENTATION_HMAC_SECRET:-}
     volumes:
       - iaric_data:/app/data/strategy_iaric
       - iaric_instrumentation:/app/instrumentation/data
@@ -42,7 +42,7 @@ services:
       STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT: ${STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT:-50}
       INSTRUMENTATION_DATA_DIR: /app/instrumentation/data
       INSTRUMENTATION_RELAY_URL: ${INSTRUMENTATION_RELAY_URL:-http://host.docker.internal:8001/events}
-      INSTRUMENTATION_HMAC_SECRET_US_ORB: ${INSTRUMENTATION_HMAC_SECRET_US_ORB:-}
+      INSTRUMENTATION_HMAC_SECRET: ${INSTRUMENTATION_HMAC_SECRET:-}
     volumes:
       - us_orb_data:/app/data/strategy_orb
       - us_orb_instrumentation:/app/instrumentation/data

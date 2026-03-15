@@ -151,6 +151,7 @@ class TradeEvent:
     session_transitions: Optional[List[dict]] = None
 
     # Strategy identification
+    strategy_id: str = ""                # "iaric" / "us_orb"
     strategy_type: str = ""              # "helix" / "nqdtc" / "vdubus"
     param_set_id: Optional[str] = None   # sha256[:16] of strategy_params for grouping
 
@@ -174,6 +175,7 @@ class TradeLogger:
     def __init__(self, config: dict, snapshot_service: MarketSnapshotService,
                  process_scorer=None, strategy_type: str = "", error_logger=None):
         self.bot_id = config["bot_id"]
+        self.strategy_id = config.get("strategy_id", "")
         self.data_dir = Path(config["data_dir"]) / "trades"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.snapshot_service = snapshot_service
@@ -290,6 +292,7 @@ class TradeLogger:
                 execution_timestamps=execution_timestamps,
                 experiment_id=experiment_id if experiment_id is not None else self.experiment_id,
                 experiment_variant=experiment_variant if experiment_variant is not None else self.experiment_variant,
+                strategy_id=self.strategy_id,
                 strategy_type=self.strategy_type,
                 stage="entry",
             )

@@ -48,8 +48,7 @@ Fill in `.env` with the real credentials and account details:
 | `STOCK_TRADER_CAPITAL_ALLOCATION_IARIC_PCT` | Capital share for `IARIC_v1` when `STOCK_TRADER_DEPLOY_MODE=both` |
 | `STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT` | Capital share for `US_ORB_v1` when `STOCK_TRADER_DEPLOY_MODE=both` |
 | `INSTRUMENTATION_RELAY_URL` | Usually `http://host.docker.internal:8001/events` |
-| `INSTRUMENTATION_HMAC_SECRET_IARIC` | Secret matching the relay allowlist for `IARIC_v1` |
-| `INSTRUMENTATION_HMAC_SECRET_US_ORB` | Secret matching the relay allowlist for `US_ORB_v1` |
+| `INSTRUMENTATION_HMAC_SECRET` | **Required in paper/live.** Shared HMAC secret matching the relay's `secrets.json["stock_trader"]`. Containers refuse to start without it. |
 
 Lock the file down after editing:
 
@@ -126,5 +125,5 @@ Expected signals:
 | --- | --- |
 | IB connection fails | Host IB Gateway is running and `IB_CLIENT_ID_*` values are unique |
 | DB connection fails | `trading_postgres` is reachable on `trading_net` and `DB_*` values match the shared stack |
-| Relay forwarding fails | Host relay is running on port `8001` and the per-strategy HMAC secret matches the relay config |
+| Relay forwarding fails | Host relay is running on port `8001` and `INSTRUMENTATION_HMAC_SECRET` matches `secrets.json["stock_trader"]` |
 | Strategy data not persisted | Confirm both `/app/data/<strategy>` and `/app/instrumentation/data` volumes are mounted |

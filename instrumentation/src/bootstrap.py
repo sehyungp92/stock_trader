@@ -41,9 +41,12 @@ _BOT_NAME_MAP = {
     "US_ORB_v1": "US ORB v1",
 }
 
-_BOT_HMAC_ENV_MAP = {
-    "IARIC_v1": "INSTRUMENTATION_HMAC_SECRET_IARIC",
-    "US_ORB_v1": "INSTRUMENTATION_HMAC_SECRET_US_ORB",
+# Single bot_id for all strategies; strategy_id distinguishes them in events
+_BOT_ID = "stock_trader"
+_HMAC_SECRET_ENV = "INSTRUMENTATION_HMAC_SECRET"
+_STRATEGY_ID_MAP = {
+    "IARIC_v1": "iaric",
+    "US_ORB_v1": "us_orb",
 }
 
 
@@ -57,14 +60,6 @@ def _resolve_config_modules(strategy_id: str, strategy_type: str) -> list[str]:
     if strategy_id in _STRATEGY_CONFIG_MODULES:
         return list(_STRATEGY_CONFIG_MODULES[strategy_id])
     return list(_STRATEGY_CONFIG_MODULES.get(strategy_type, []))
-
-
-def _resolve_hmac_env(strategy_id: str, strategy_type: str) -> str:
-    if strategy_id in _BOT_HMAC_ENV_MAP:
-        return _BOT_HMAC_ENV_MAP[strategy_id]
-    if strategy_type in _BOT_HMAC_ENV_MAP:
-        return _BOT_HMAC_ENV_MAP[strategy_type]
-    return "INSTRUMENTATION_HMAC_SECRET"
 
 
 def _load_config(strategy_id: str, strategy_type: str) -> dict:
@@ -82,7 +77,8 @@ def _load_config(strategy_id: str, strategy_type: str) -> dict:
     market_snapshots = dict(config.get("market_snapshots") or {})
     logging_config = dict(config.get("logging") or {})
 
-    config["bot_id"] = strategy_id
+    config["bot_id"] = _BOT_ID
+    config["strategy_id"] = _STRATEGY_ID_MAP.get(strategy_id, normalized_strategy_type)
     config["bot_name"] = config.get("bot_name") or _BOT_NAME_MAP.get(strategy_id, strategy_id)
     config["strategy_type"] = normalized_strategy_type
     config["data_dir"] = data_dir
@@ -94,7 +90,7 @@ def _load_config(strategy_id: str, strategy_type: str) -> dict:
     config["market_snapshots"] = market_snapshots
 
     sidecar_config.setdefault("relay_url", "http://host.docker.internal:8001/events")
-    sidecar_config["hmac_secret_env"] = _resolve_hmac_env(strategy_id, normalized_strategy_type)
+    sidecar_config["hmac_secret_env"] = _HMAC_SECRET_ENV
     sidecar_config["buffer_dir"] = os.environ.get("INSTRUMENTATION_BUFFER_DIR") or str(Path(data_dir) / ".sidecar_buffer")
     config["sidecar"] = sidecar_config
 
@@ -264,6 +260,15 @@ class InstrumentationManager:
         """Subscribe to OMS events and start background tasks."""
         if self._running:
             return
+
+        # Enforce HMAC auth in non-dev environments — relay will reject unsigned events
+        env = get_environment()
+        if env in ("paper", "live") and not self.sidecar.hmac_secret:
+            raise RuntimeError(
+                f"HMAC secret is required in {env} mode. "
+                f"Set {_HMAC_SECRET_ENV} environment variable."
+            )
+
         self._running = True
 
         try:

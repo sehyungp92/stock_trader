@@ -40,6 +40,7 @@ class MissedOpportunityEvent:
     market_snapshot: dict
 
     bot_id: str = ""
+    strategy_id: str = ""               # "iaric" / "us_orb"
     pair: str = ""
     side: str = ""
     signal: str = ""
@@ -113,6 +114,7 @@ class MissedOpportunityLogger:
 
     def __init__(self, config: dict, snapshot_service: MarketSnapshotService, error_logger=None):
         self.bot_id = config["bot_id"]
+        self.strategy_id = config.get("strategy_id", "")
         self.data_dir = Path(config["data_dir"]) / "missed"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.snapshot_service = snapshot_service
@@ -146,6 +148,8 @@ class MissedOpportunityLogger:
     def _get_policy(self, strategy_type: str = None) -> SimulationPolicy:
         if strategy_type and strategy_type in self.simulation_policies:
             return self.simulation_policies[strategy_type]
+        if self.strategy_id and self.strategy_id in self.simulation_policies:
+            return self.simulation_policies[self.strategy_id]
         return self.simulation_policies.get("default", SimulationPolicy())
 
     def _compute_hypothetical_entry(
@@ -235,6 +239,7 @@ class MissedOpportunityLogger:
                 event_metadata=metadata.to_dict(),
                 market_snapshot=snapshot.to_dict(),
                 bot_id=self.bot_id,
+                strategy_id=self.strategy_id,
                 pair=pair,
                 side=side,
                 signal=signal,
