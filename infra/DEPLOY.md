@@ -8,23 +8,20 @@ This repo does not provision PostgreSQL, the dashboard, or the relay. It joins t
 ## Target topology
 
 ```text
-Ubuntu VPS
-|- IB Gateway on host (swing_trader managed)
+Ubuntu VPS (all services reachable on 127.0.0.1 via network_mode: host)
+|- IB Gateway on host :4002 (swing_trader managed)
+|- PostgreSQL on host :5432 (swing_trader managed)
+|- Relay on host :8001 (swing_trader/relay, forwards to trading_assistant)
+|- Dashboard (swing_trader managed)
 |- Docker
-|  |- trading_postgres (swing_trader managed)
-|  |- trading_dashboard (swing_trader managed)
-|  |- trading_net (external shared network)
-|  |- stock_trader_strategy_iaric
-|  `- stock_trader_strategy_orb
-`- Relay on host :8001 (swing_trader/relay, forwards to trading_assistant)
+|  |- stock_trader_strategy_iaric (network_mode: host)
+|  `- stock_trader_strategy_orb  (network_mode: host)
 ```
 
 ## Prerequisites
 
-- The shared `swing_trader` stack is already running on this VPS.
-- The external Docker network `trading_net` already exists.
-- Hostname `host.docker.internal` resolves inside Docker via `host-gateway`.
-- You have the same DB credentials used by the shared `swing_trader` Postgres container.
+- The shared `swing_trader` stack is already running on this VPS (IB Gateway, PostgreSQL, relay).
+- You have the same DB credentials used by the shared PostgreSQL instance.
 
 ## 1. Prepare the repo
 
@@ -47,7 +44,7 @@ Fill in `.env` with the real credentials and account details:
 | `STOCK_TRADER_DEPLOY_MODE` | `both` by default; override to `iaric` or `us_orb` for solo launches |
 | `STOCK_TRADER_CAPITAL_ALLOCATION_IARIC_PCT` | Capital share for `IARIC_v1` when `STOCK_TRADER_DEPLOY_MODE=both` |
 | `STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT` | Capital share for `US_ORB_v1` when `STOCK_TRADER_DEPLOY_MODE=both` |
-| `INSTRUMENTATION_RELAY_URL` | Usually `http://host.docker.internal:8001/events` |
+| `INSTRUMENTATION_RELAY_URL` | `http://127.0.0.1:8001/events` (hardcoded in docker-compose, `.env` value ignored) |
 | `INSTRUMENTATION_HMAC_SECRET` | **Required in paper/live.** Shared HMAC secret matching the relay's `secrets.json["stock_trader"]`. Containers refuse to start without it. |
 
 Lock the file down after editing:
@@ -99,9 +96,9 @@ docker compose -f infra/docker-compose.yml logs -f strategy_orb
 Verify shared services from a container:
 
 ```bash
-docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('host.docker.internal', 4002)); print('ib ok'); s.close()"
-docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('trading_postgres', 5432)); print('db ok'); s.close()"
-docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('host.docker.internal', 8001)); print('relay ok'); s.close()"
+docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', 4002)); print('ib ok'); s.close()"
+docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', 5432)); print('db ok'); s.close()"
+docker exec stock_trader_strategy_iaric python -c "import socket; s=socket.socket(); s.connect(('127.0.0.1', 8001)); print('relay ok'); s.close()"
 ```
 
 Expected signals:
@@ -124,6 +121,6 @@ Expected signals:
 | Problem | Check |
 | --- | --- |
 | IB connection fails | Host IB Gateway is running and `IB_CLIENT_ID_*` values are unique |
-| DB connection fails | `trading_postgres` is reachable on `trading_net` and `DB_*` values match the shared stack |
+| DB connection fails | PostgreSQL is running on host (`ss -tlnp | grep 5432`) and `DB_HOST=127.0.0.1` in `.env` |
 | Relay forwarding fails | Host relay is running on port `8001` and `INSTRUMENTATION_HMAC_SECRET` matches `secrets.json["stock_trader"]` |
 | Strategy data not persisted | Confirm both `/app/data/<strategy>` and `/app/instrumentation/data` volumes are mounted |
