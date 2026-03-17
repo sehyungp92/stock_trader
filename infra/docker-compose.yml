@@ -44,7 +44,7 @@ services:
       INSTRUMENTATION_DATA_DIR: /app/instrumentation/data
       INSTRUMENTATION_RELAY_URL: "http://127.0.0.1:8001/events"
     volumes:
-      - us_orb_data:/app/data/strategy_orb
+      - us_orb_data:/app/data/strategy_orb/diagnostics
       - us_orb_instrumentation:/app/instrumentation/data
 
 volumes:
