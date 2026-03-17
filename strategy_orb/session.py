@@ -16,7 +16,7 @@ from shared.ibkr_core.mapping.contract_factory import ContractFactory
 from shared.oms.persistence.db_config import get_environment
 from shared.oms.risk.calculator import RiskCalculator
 from shared.oms.services.factory import build_oms_service
-from shared.services.deployment import resolve_strategy_capital_allocation
+from shared.services.deployment import resolve_paper_nav, resolve_strategy_capital_allocation
 from shared.services.bootstrap import BootstrapContext, bootstrap_database, shutdown_database
 
 from .config import STRATEGY_ID, StrategySettings
@@ -111,14 +111,16 @@ async def bootstrap_runtime(
 
     bootstrap = await bootstrap_database()
     raw_nav = await fetch_nav(session)
-    capital_allocation = resolve_strategy_capital_allocation(STRATEGY_ID, raw_nav=raw_nav)
+    effective_nav = resolve_paper_nav(raw_nav, Path("data/strategy_orb/paper_capital_state.json"))
+    capital_allocation = resolve_strategy_capital_allocation(STRATEGY_ID, raw_nav=effective_nav)
     capital_allocation.assert_enabled()
     capital_allocation.assert_positive_allocated_nav()
     logger.info(
-        "Capital allocation resolved for %s: deploy_mode=%s raw_nav=%.2f allocated_nav=%.2f capital_pct=%.2f",
+        "Capital allocation resolved for %s: deploy_mode=%s ib_nav=%.2f effective_nav=%.2f allocated_nav=%.2f capital_pct=%.2f",
         STRATEGY_ID,
         capital_allocation.deploy_mode,
-        capital_allocation.raw_nav,
+        raw_nav,
+        effective_nav,
         capital_allocation.allocated_nav,
         capital_allocation.capital_pct,
     )
