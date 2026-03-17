@@ -1,5 +1,5 @@
 # Process quality scoring rules
-# Adapted for NQ/MNQ multi-strategy futures bot
+# US equities intraday strategies via IBKR
 
 global:
   max_entry_latency_ms: 5000
@@ -9,39 +9,26 @@ global:
   expected_slippage_bps: 3
 
 strategies:
-  # Helix v4.0 — trend-following pullback
-  helix:
+  # IARIC v1 — intraday AVWAP pullback, US large-cap equities
+  iaric:
     preferred_regimes:
       - trending_up
       - trending_down
     adverse_regimes:
       - ranging
-    max_hold_bars: 200
-    expected_slippage_bps: 2
-    min_signal_strength: 0.3      # alignment_score normalized: 0/2=0.0, 1/2=0.5, 2/2=1.0
-    strong_signal_threshold: 0.8
+    max_hold_bars: 78              # Intraday 5-min bars: ~6.5h session
+    expected_slippage_bps: 3       # US large-cap equities, IBKR SMART routing
+    min_signal_strength: 0.40      # tier_b_min threshold
+    strong_signal_threshold: 0.65  # tier_a_min threshold
 
-  # NQDTC v2.1 — box breakout
-  nqdtc:
+  # US ORB v1 — opening range breakout, US equities
+  us_orb:
     preferred_regimes:
       - trending_up
-      - trending_down
       - volatile
     adverse_regimes:
       - ranging
-    max_hold_bars: 100
-    expected_slippage_bps: 2
-    min_signal_strength: 0.33     # evidence_score normalized: 1.5/4.5 ≈ 0.33
-    strong_signal_threshold: 0.67
-
-  # VdubusNQ v4.2 — VWAP pullback
-  vdubus:
-    preferred_regimes:
-      - trending_up
-      - trending_down
-    adverse_regimes:
-      - volatile
-    max_hold_bars: 128
-    expected_slippage_bps: 2
-    min_signal_strength: 0.3
-    strong_signal_threshold: 0.7
+    max_hold_bars: 72              # Intraday 5-min bars: entry 9:51 to flatten 15:45
+    expected_slippage_bps: 5       # First 15 min: wider spreads at open
+    min_signal_strength: 0.50      # minimum_quality_score / 100
+    strong_signal_threshold: 0.85  # top_quality_score / 100

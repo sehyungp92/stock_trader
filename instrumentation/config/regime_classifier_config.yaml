@@ -1,4 +1,4 @@
-# Regime classifier thresholds — tuned for NQ futures (1H timeframe)
+# Regime classifier thresholds — US equities intraday
 ma_period: 50
 adx_period: 14
 adx_trend_threshold: 25.0
