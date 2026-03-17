@@ -89,7 +89,7 @@ def _load_config(strategy_id: str, strategy_type: str) -> dict:
     market_snapshots.setdefault("interval_seconds", 60)
     config["market_snapshots"] = market_snapshots
 
-    sidecar_config.setdefault("relay_url", "http://host.docker.internal:8001/events")
+    sidecar_config.setdefault("relay_url", "http://127.0.0.1:8001/events")
     sidecar_config["hmac_secret_env"] = _HMAC_SECRET_ENV
     sidecar_config["buffer_dir"] = os.environ.get("INSTRUMENTATION_BUFFER_DIR") or str(Path(data_dir) / ".sidecar_buffer")
     config["sidecar"] = sidecar_config
