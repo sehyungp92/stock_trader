@@ -12,7 +12,6 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY config/ config/
-COPY data/ data/
 COPY strategy_iaric/ strategy_iaric/
 COPY instrumentation/ instrumentation/
 COPY shared/ shared/
