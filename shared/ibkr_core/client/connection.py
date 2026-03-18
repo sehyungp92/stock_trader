@@ -111,6 +111,9 @@ class ConnectionManager:
     async def _reconnect_loop(self) -> None:
         """Reconnect with exponential backoff."""
         await self._attempt_connect()
+        # Re-assert live market data type after reconnect
+        if self._connected.is_set():
+            self._ib.reqMarketDataType(1)
         # H5 fix: trigger reconciliation after successful reconnection
         if self._on_reconnect_callback and self._connected.is_set():
             try:

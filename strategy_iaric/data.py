@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Iterable
+
+logger = logging.getLogger(__name__)
 
 from ib_async import IB
 
@@ -220,37 +223,83 @@ class IBMarketDataSource:
         self._poll_budget = RateBudget(rate_per_second=2.0, burst=4.0)
         self._snapshot_cache = SnapshotCache()
         self._last_history_end: dict[str, datetime] = {}
+        self._blacklisted: dict[str, datetime] = {}  # symbol -> expiry (UTC)
         self._running = False
 
     async def start(self) -> None:
         if self._running:
             return
         self._ib.pendingTickersEvent += self._handle_pending_tickers
+        self._ib.errorEvent += self._on_ib_error
         self._running = True
 
     async def stop(self) -> None:
         if not self._running:
             return
         self._ib.pendingTickersEvent -= self._handle_pending_tickers
-        for contract in list(self._contracts.values()):
+        self._ib.errorEvent -= self._on_ib_error
+        for symbol in list(self._contracts):
+            self._remove_symbol(symbol)
+        self._running = False
+
+    def invalidate_subscriptions(self) -> None:
+        """Clear tracked subscriptions after IBKR reconnect.
+
+        Old subscriptions are dead on the broker side, so we just clear
+        local state.  The next ``ensure_hot_symbols`` call will
+        re-resolve and re-subscribe everything.
+        """
+        self._contracts.clear()
+        self._builders.clear()
+        self._last_history_end.clear()
+
+    def _remove_symbol(self, symbol: str) -> None:
+        contract = self._contracts.pop(symbol, None)
+        if contract is not None:
             self._ib.cancelTickByTickData(contract, "Last")
             self._ib.cancelTickByTickData(contract, "BidAsk")
             self._ib.cancelMktData(contract)
-        self._contracts.clear()
-        self._running = False
+        self._builders.pop(symbol, None)
+
+    # 10089 = market data subscription required (fatal for symbol)
+    # 10189 = tick-by-tick denied (non-fatal, degrade gracefully)
+    _BLACKLIST_ERRORS = frozenset({10089})
+    _TICK_BY_TICK_ERRORS = frozenset({10189})
+    _BLACKLIST_DURATION = timedelta(hours=1)
+
+    def _on_ib_error(self, reqId: int, errorCode: int, errorString: str, contract) -> None:
+        symbol = getattr(contract, "symbol", "").upper() if contract else ""
+        if errorCode in self._TICK_BY_TICK_ERRORS:
+            if symbol:
+                logger.warning(
+                    "Tick-by-tick denied for %s (code %d), continuing with reqMktData only: %s",
+                    symbol, errorCode, errorString,
+                )
+            return
+        if errorCode not in self._BLACKLIST_ERRORS:
+            return
+        if not symbol or symbol not in self._contracts:
+            return
+        logger.warning(
+            "Market data permission denied for %s (code %d), blacklisting for 1h: %s",
+            symbol, errorCode, errorString,
+        )
+        self._remove_symbol(symbol)
+        self._blacklisted[symbol] = datetime.now(timezone.utc) + self._BLACKLIST_DURATION
 
     async def ensure_hot_symbols(self, instruments: Iterable[Instrument]) -> None:
         wanted = {instrument.symbol: instrument for instrument in instruments}
         for symbol in list(self._contracts):
             if symbol not in wanted:
-                contract = self._contracts.pop(symbol)
-                self._ib.cancelTickByTickData(contract, "Last")
-                self._ib.cancelTickByTickData(contract, "BidAsk")
-                self._ib.cancelMktData(contract)
-                self._builders.pop(symbol, None)
+                self._remove_symbol(symbol)
+        now = datetime.now(timezone.utc)
         for symbol, instrument in wanted.items():
             if symbol in self._contracts:
                 continue
+            if symbol in self._blacklisted:
+                if now < self._blacklisted[symbol]:
+                    continue
+                del self._blacklisted[symbol]
             contract, _ = await self._factory.resolve(symbol=instrument.root or instrument.symbol, instrument=instrument)
             self._contracts[symbol] = contract
             self._builders[symbol] = _MinuteAccumulator()
@@ -299,7 +348,7 @@ class IBMarketDataSource:
                 continue
             self._snapshot_cache.put(cache_key, "pending", now=current)
             await self._poll_budget.wait_for()
-            duration = "1 D" if symbol not in self._last_history_end else "30 M"
+            duration = "1 D" if symbol not in self._last_history_end else "1800 S"
             try:
                 bars = await self.request_recent_bars(instrument, duration=duration)
             except Exception:

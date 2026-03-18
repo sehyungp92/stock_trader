@@ -50,8 +50,6 @@ async def main() -> None:
         diagnostics=diagnostics,
         instrumentation=services.instrumentation_kit,
     )
-    services.session.set_reconnect_callback(engine._reconcile_after_reconnect)
-
     # Reconcile OMS vs broker positions on startup to catch orphans from prior crashes
     try:
         await engine._reconcile_after_reconnect()
@@ -65,6 +63,15 @@ async def main() -> None:
         on_quote=engine.on_quote,
         on_bar=engine.on_bar,
     )
+
+    async def _on_reconnect() -> None:
+        await engine._reconcile_after_reconnect()
+        logger.info("Restarting scanner subscriptions after reconnect")
+        await scanner.restart()
+        market_data.invalidate_subscriptions()
+        logger.info("Market data subscriptions invalidated — scanner_loop will re-subscribe")
+
+    services.session.set_reconnect_callback(_on_reconnect)
     stop_event = asyncio.Event()
     started_at = datetime.now(timezone.utc)
 

@@ -45,12 +45,15 @@ class IBSession:
         """Connect, receive nextValidId, start heartbeat, mark ready."""
         await self._conn.connect()
         await self._conn.wait_until_ready()
+        # Request live (type 1) market data — without this, paper accounts
+        # may default to delayed/frozen and reject streaming subscriptions.
+        self._conn.ib.reqMarketDataType(1)
         # Seed order ID from IB
         self._ids.set_next_valid_id(self._conn.ib.client.getReqId())
         self._heartbeat = HeartbeatMonitor(self._conn.ib)
         await self._heartbeat.start()
         self._ready.set()
-        logger.info("IBSession ready")
+        logger.info("IBSession ready (marketDataType=1)")
 
     async def stop(self) -> None:
         if self._heartbeat:

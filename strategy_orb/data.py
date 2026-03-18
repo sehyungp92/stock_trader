@@ -168,6 +168,11 @@ class IBScannerSource:
         self._handles.clear()
         self._running = False
 
+    async def restart(self) -> None:
+        """Stop and re-start scanner subscriptions (e.g. after IBKR reconnect)."""
+        await self.stop()
+        await self.start()
+
     async def next_update(self) -> list[str]:
         return await self._queue.get()
 
@@ -229,6 +234,25 @@ class IBMarketDataSource:
             self._remove_symbol(symbol)
         self._running = False
 
+    def invalidate_subscriptions(self) -> None:
+        """Clear tracked subscriptions after IBKR reconnect.
+
+        Old subscriptions are already dead on the broker side, so we just
+        clear local state.  The next ``ensure_symbols`` call will
+        re-resolve and re-subscribe everything.
+        """
+        self._contracts.clear()
+        self._builders.clear()
+        self._flows.clear()
+        self._processed_ticks.clear()
+        self._cumulative_value.clear()
+        self._instruments.clear()
+        self._last_quote_ts.clear()
+        self._last_midpoints.clear()
+        self._last_spreads.clear()
+        self._quote_expansion_streaks.clear()
+        self._halted_state.clear()
+
     def _remove_symbol(self, symbol: str) -> None:
         contract = self._contracts.pop(symbol, None)
         if contract is not None:
@@ -246,14 +270,23 @@ class IBMarketDataSource:
         self._quote_expansion_streaks.pop(symbol, None)
         self._halted_state.pop(symbol, None)
 
-    # Market-data permission errors (10089 = subscription required, 10189 = tick-by-tick denied)
-    _PERMISSION_ERRORS = frozenset({10089, 10189})
+    # 10089 = market data subscription required (fatal for symbol)
+    # 10189 = tick-by-tick denied (non-fatal, degrade to reqMktData only)
+    _BLACKLIST_ERRORS = frozenset({10089})
+    _TICK_BY_TICK_ERRORS = frozenset({10189})
     _BLACKLIST_DURATION = timedelta(hours=1)
 
     def _on_ib_error(self, reqId: int, errorCode: int, errorString: str, contract) -> None:
-        if errorCode not in self._PERMISSION_ERRORS:
-            return
         symbol = getattr(contract, "symbol", "").upper() if contract else ""
+        if errorCode in self._TICK_BY_TICK_ERRORS:
+            if symbol:
+                logger.warning(
+                    "Tick-by-tick denied for %s (code %d), continuing with reqMktData only: %s",
+                    symbol, errorCode, errorString,
+                )
+            return
+        if errorCode not in self._BLACKLIST_ERRORS:
+            return
         if not symbol or symbol not in self._contracts:
             return
         logger.warning(

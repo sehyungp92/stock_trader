@@ -55,8 +55,6 @@ async def run_intraday_session(
     if snapshot is not None:
         engine.hydrate_state(snapshot)
 
-    services.session.set_reconnect_callback(engine._reconcile_after_reconnect)
-
     # Reconcile OMS vs broker positions on startup to catch orphans from prior crashes
     try:
         await engine._reconcile_after_reconnect()
@@ -69,6 +67,13 @@ async def run_intraday_session(
         on_quote=engine.on_quote,
         on_bar=engine.on_bar,
     )
+
+    async def _on_reconnect() -> None:
+        await engine._reconcile_after_reconnect()
+        market_data.invalidate_subscriptions()
+        logger.info("Market data subscriptions invalidated after reconnect — main loop will re-subscribe")
+
+    services.session.set_reconnect_callback(_on_reconnect)
     stop_event = asyncio.Event()
     started_at = datetime.now(timezone.utc)
 
