@@ -12,11 +12,12 @@ from pathlib import Path
 from instrumentation.src.strategy_data_providers import USORBInstrumentationDataProvider
 from shared.services.heartbeat import emit_heartbeat
 
-from .config import STRATEGY_ID, StrategySettings
-from .data import IBMarketDataSource, IBScannerSource, load_universe_cache
+from .config import ET, STRATEGY_ID, StrategySettings
+from .data import IBMarketDataSource, IBScannerSource
 from .diagnostics import JsonlDiagnostics
 from .engine import USORBEngine
 from .session import bootstrap_runtime, shutdown_runtime
+from .universe_builder import LiveUniverseBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +26,19 @@ async def main() -> None:
     settings = StrategySettings()
     config_dir = Path(__file__).resolve().parents[1] / "config"
     services = await bootstrap_runtime(config_dir=config_dir, settings=settings)
-    cache = load_universe_cache(settings.cache_path)
+    cache: dict = {}
+    builder = LiveUniverseBuilder(
+        ib=services.session.ib, cache=cache, cache_dir=settings.cache_dir,
+    )
     diagnostics = JsonlDiagnostics(settings.diagnostics_dir)
+
+    # Optional pre-market warmup
+    et_now = datetime.now(ET)
+    if et_now.time() < settings.scanner_start:
+        try:
+            await builder.pre_market_warmup()
+        except Exception:
+            logger.exception("Pre-market warmup failed — continuing with empty cache")
 
     engine = USORBEngine(
         oms_service=services.oms,
@@ -72,10 +84,12 @@ async def main() -> None:
         while True:
             try:
                 symbols = await asyncio.wait_for(scanner.next_update(), timeout=5.0)
+                builder.resolve_batch(symbols)
                 engine.update_scanner_symbols(symbols, datetime.now(timezone.utc))
             except asyncio.TimeoutError:
                 symbols = scanner.latest_symbols()
                 if symbols:
+                    builder.resolve_batch(symbols)
                     engine.update_scanner_symbols(symbols, datetime.now(timezone.utc))
             except Exception as exc:
                 logger.exception("Scanner loop failed")

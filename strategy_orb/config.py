@@ -102,11 +102,13 @@ class StrategySettings:
     ask_past_high_cooldown_s: int = 300
     danger_cooldown_s: int = 180
 
+    warmup_start: time = time(9, 15)
+
     diagnostics_dir: Path = field(
         default_factory=lambda: Path(__file__).resolve().parents[1] / "data" / "strategy_orb" / "diagnostics"
     )
-    cache_path: Path = field(
-        default_factory=lambda: Path(__file__).resolve().parents[1] / "data" / "strategy_orb" / "universe.jsonl"
+    cache_dir: Path = field(
+        default_factory=lambda: Path(__file__).resolve().parents[1] / "data" / "strategy_orb" / "cache"
     )
     scanner: ScannerSettings = field(default_factory=ScannerSettings)
 

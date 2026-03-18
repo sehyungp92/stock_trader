@@ -1,14 +1,12 @@
-"""Cache loading and thin IB data-source bridges."""
+"""Thin IB data-source bridges."""
 
 from __future__ import annotations
 
 import asyncio
 import inspect
-import json
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Awaitable, Callable, Iterable
 
 from ib_async import (
@@ -22,103 +20,6 @@ from shared.ibkr_core.mapping.contract_factory import ContractFactory
 
 from .config import PROXY_SYMBOLS, ScannerSettings
 from .models import CachedSymbol, MinuteBar, QuoteSnapshot
-
-REQUIRED_CACHE_FIELDS = {
-    "symbol",
-    "exchange",
-    "primary_exchange",
-    "currency",
-    "tick_size",
-    "point_value",
-    "adv20",
-    "prior_close",
-    "sma20",
-    "sma60",
-    "sma20_slope",
-    "atr1m14",
-    "opening_value15_baseline_0935_0950",
-    "minute_volume_baseline_0935_1115",
-}
-
-
-class CacheValidationError(ValueError):
-    """Raised when the universe cache does not match the contract."""
-
-
-def cache_contract() -> dict[str, Any]:
-    return {
-        "format": "jsonl",
-        "version": 1,
-        "required_fields": sorted(REQUIRED_CACHE_FIELDS),
-        "optional_fields": [
-            "sector",
-            "float_shares",
-            "float_bucket",
-            "catalyst_tag",
-            "luld_tier",
-            "tech_tag",
-            "secondary_universe",
-        ],
-        "notes": {
-            "opening_value15_baseline_0935_0950": "20-day baseline for 09:35-09:50 dollar value",
-            "minute_volume_baseline_0935_1115": "Minute-of-day baseline map covering the entry window",
-        },
-    }
-
-
-def load_universe_cache(path: str | Path) -> dict[str, CachedSymbol]:
-    rows: dict[str, CachedSymbol] = {}
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(path)
-
-    with open(path, "r", encoding="utf-8") as handle:
-        for line_no, raw_line in enumerate(handle, start=1):
-            line = raw_line.strip()
-            if not line:
-                continue
-            payload = json.loads(line)
-            rows[payload["symbol"]] = _parse_cache_row(payload, line_no)
-    return rows
-
-
-def _parse_cache_row(payload: dict[str, Any], line_no: int) -> CachedSymbol:
-    missing = REQUIRED_CACHE_FIELDS - payload.keys()
-    if missing:
-        raise CacheValidationError(f"line {line_no}: missing fields {sorted(missing)}")
-
-    minute_map = payload["minute_volume_baseline_0935_1115"]
-    if not isinstance(minute_map, dict) or "09:35" not in minute_map or "11:15" not in minute_map:
-        raise CacheValidationError(
-            f"line {line_no}: minute_volume_baseline_0935_1115 must be a dict with 09:35 and 11:15 keys"
-        )
-
-    try:
-        return CachedSymbol(
-            symbol=str(payload["symbol"]).upper(),
-            exchange=str(payload["exchange"]),
-            primary_exchange=str(payload["primary_exchange"]),
-            currency=str(payload["currency"]),
-            tick_size=float(payload["tick_size"]),
-            point_value=float(payload["point_value"]),
-            adv20=float(payload["adv20"]),
-            prior_close=float(payload["prior_close"]),
-            sma20=float(payload["sma20"]),
-            sma60=float(payload["sma60"]),
-            sma20_slope=float(payload["sma20_slope"]),
-            atr1m14=float(payload["atr1m14"]),
-            opening_value15_baseline_0935_0950=float(payload["opening_value15_baseline_0935_0950"]),
-            minute_volume_baseline_0935_1115={str(key): float(value) for key, value in minute_map.items()},
-            sector=str(payload.get("sector", "")),
-            float_shares=float(payload["float_shares"]) if payload.get("float_shares") not in (None, "") else None,
-            float_bucket=str(payload.get("float_bucket", "")),
-            catalyst_tag=str(payload.get("catalyst_tag", "")),
-            luld_tier=str(payload.get("luld_tier", "tier_1")),
-            tech_tag=bool(payload.get("tech_tag", False)),
-            secondary_universe=bool(payload.get("secondary_universe", float(payload["adv20"]) < 20_000_000.0)),
-        )
-    except (TypeError, ValueError) as exc:
-        raise CacheValidationError(f"line {line_no}: {exc}") from exc
 
 
 @dataclass

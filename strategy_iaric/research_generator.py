@@ -75,7 +75,7 @@ class _RateBudget:
 
 def _stock_contract(symbol: str, exchange: str = "SMART", primary_exchange: str = ""):
     """Build an IB Stock contract."""
-    from ib_insync import Stock
+    from ib_async import Stock
     c = Stock(symbol, exchange, "USD")
     if primary_exchange:
         c.primaryExchange = primary_exchange
@@ -83,7 +83,7 @@ def _stock_contract(symbol: str, exchange: str = "SMART", primary_exchange: str 
 
 
 def _index_contract(symbol: str, exchange: str = "CBOE"):
-    from ib_insync import Index
+    from ib_async import Index
     return Index(symbol, exchange, "USD")
 
 
@@ -503,7 +503,7 @@ async def _resolve_contract(
 
 async def _fetch_scanner_symbols(ib, rate: _RateBudget) -> list[str]:
     """Fetch momentum scanner results to supplement universe."""
-    from ib_insync import ScannerSubscription
+    from ib_async import ScannerSubscription
 
     await rate.wait_for()
     sub = ScannerSubscription(
