@@ -117,7 +117,7 @@ class USORBEngine:
 
     def update_scanner_symbols(self, symbols: list[str], now: datetime) -> None:
         et = now.astimezone(ET)
-        if et.time() < self._settings.scanner_start:
+        if et.time() < self._settings.scanner_start or et.time() >= self._settings.forced_flatten:
             return
         shortlist = self._pool.shortlist(symbols)
         self._live_pool = set(shortlist) | set(PROXY_SYMBOLS)

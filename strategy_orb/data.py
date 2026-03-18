@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable, Iterable
+
+logger = logging.getLogger(__name__)
 
 from ib_async import (
     IB,
@@ -207,47 +210,74 @@ class IBMarketDataSource:
         self._last_spreads: dict[str, float] = {}
         self._quote_expansion_streaks: dict[str, int] = {}
         self._halted_state: dict[str, bool] = {}
+        self._blacklisted: dict[str, datetime] = {}  # symbol -> expiry (UTC)
         self._running = False
 
     async def start(self) -> None:
         if self._running:
             return
         self._ib.pendingTickersEvent += self._handle_pending_tickers
+        self._ib.errorEvent += self._on_ib_error
         self._running = True
 
     async def stop(self) -> None:
         if not self._running:
             return
         self._ib.pendingTickersEvent -= self._handle_pending_tickers
-        for symbol, contract in list(self._contracts.items()):
+        self._ib.errorEvent -= self._on_ib_error
+        for symbol in list(self._contracts):
+            self._remove_symbol(symbol)
+        self._running = False
+
+    def _remove_symbol(self, symbol: str) -> None:
+        contract = self._contracts.pop(symbol, None)
+        if contract is not None:
             self._ib.cancelTickByTickData(contract, "Last")
             self._ib.cancelTickByTickData(contract, "BidAsk")
             self._ib.cancelMktData(contract)
-            self._contracts.pop(symbol, None)
-        self._running = False
+        self._builders.pop(symbol, None)
+        self._flows.pop(symbol, None)
+        self._processed_ticks.pop(symbol, None)
+        self._cumulative_value.pop(symbol, None)
+        self._instruments.pop(symbol, None)
+        self._last_quote_ts.pop(symbol, None)
+        self._last_midpoints.pop(symbol, None)
+        self._last_spreads.pop(symbol, None)
+        self._quote_expansion_streaks.pop(symbol, None)
+        self._halted_state.pop(symbol, None)
+
+    # Market-data permission errors (10089 = subscription required, 10189 = tick-by-tick denied)
+    _PERMISSION_ERRORS = frozenset({10089, 10189})
+    _BLACKLIST_DURATION = timedelta(hours=1)
+
+    def _on_ib_error(self, reqId: int, errorCode: int, errorString: str, contract) -> None:
+        if errorCode not in self._PERMISSION_ERRORS:
+            return
+        symbol = getattr(contract, "symbol", "").upper() if contract else ""
+        if not symbol or symbol not in self._contracts:
+            return
+        logger.warning(
+            "Market data permission denied for %s (code %d), blacklisting for 1h: %s",
+            symbol, errorCode, errorString,
+        )
+        self._remove_symbol(symbol)
+        self._blacklisted[symbol] = datetime.now(timezone.utc) + self._BLACKLIST_DURATION
 
     async def ensure_symbols(self, instruments: Iterable[Any]) -> None:
         wanted = {instrument.symbol: instrument for instrument in instruments}
         for symbol in list(self._contracts):
             if symbol not in wanted and symbol not in PROXY_SYMBOLS:
-                contract = self._contracts.pop(symbol)
-                self._ib.cancelTickByTickData(contract, "Last")
-                self._ib.cancelTickByTickData(contract, "BidAsk")
-                self._ib.cancelMktData(contract)
-                self._builders.pop(symbol, None)
-                self._flows.pop(symbol, None)
-                self._processed_ticks.pop(symbol, None)
-                self._cumulative_value.pop(symbol, None)
-                self._instruments.pop(symbol, None)
-                self._last_quote_ts.pop(symbol, None)
-                self._last_midpoints.pop(symbol, None)
-                self._last_spreads.pop(symbol, None)
-                self._quote_expansion_streaks.pop(symbol, None)
-                self._halted_state.pop(symbol, None)
+                self._remove_symbol(symbol)
 
+        now = datetime.now(timezone.utc)
         for symbol, instrument in wanted.items():
             if symbol in self._contracts:
                 continue
+            # Skip symbols blacklisted due to permission errors
+            if symbol in self._blacklisted:
+                if now < self._blacklisted[symbol]:
+                    continue
+                del self._blacklisted[symbol]
             contract, _ = await self._factory.resolve(symbol=instrument.root or instrument.symbol, instrument=instrument)
             self._contracts[symbol] = contract
             self._instruments[symbol] = instrument

@@ -193,6 +193,8 @@ async def run_intraday_session(
 
 async def main() -> None:
     cfg = StrategySettings()
+    logger.info("IARIC strategy started — premarket %s–%s, market %s–%s ET",
+                cfg.premarket_start, cfg.premarket_end, cfg.market_open, cfg.close_block_start)
     ran_selection_for: date | None = None
     while True:
         now = datetime.now(ET)
