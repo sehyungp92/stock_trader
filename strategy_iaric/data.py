@@ -224,6 +224,8 @@ class IBMarketDataSource:
         self._snapshot_cache = SnapshotCache()
         self._last_history_end: dict[str, datetime] = {}
         self._blacklisted: dict[str, datetime] = {}  # symbol -> expiry (UTC)
+        self._last_farm_ok_ts: float = 0.0  # monotonic timestamp of last 2104 warning
+        self._last_farm_blip_ts: float = 0.0  # monotonic timestamp of last 2103/2119 warning
         self._running = False
 
     async def start(self) -> None:
@@ -252,6 +254,7 @@ class IBMarketDataSource:
         self._contracts.clear()
         self._builders.clear()
         self._last_history_end.clear()
+        self._blacklisted.clear()
 
     def _remove_symbol(self, symbol: str) -> None:
         contract = self._contracts.pop(symbol, None)
@@ -265,9 +268,29 @@ class IBMarketDataSource:
     # 10189 = tick-by-tick denied (non-fatal, degrade gracefully)
     _BLACKLIST_ERRORS = frozenset({10089})
     _TICK_BY_TICK_ERRORS = frozenset({10189})
+    _FARM_BLIP_CODES = frozenset({2103, 2119})  # farm broken / farm connecting
+    _FARM_OK_CODES = frozenset({2104})
+    _FARM_RECONNECT_GRACE_S = 30.0
     _BLACKLIST_DURATION = timedelta(hours=1)
 
     def _on_ib_error(self, reqId: int, errorCode: int, errorString: str, contract) -> None:
+        # Track farm blip start (2103 = broken, 2119 = connecting)
+        if errorCode in self._FARM_BLIP_CODES:
+            self._last_farm_blip_ts = time.monotonic()
+            return
+
+        # Track farm reconnection events (warning 2104 = "farm connection is OK")
+        if errorCode in self._FARM_OK_CODES:
+            self._last_farm_ok_ts = time.monotonic()
+            # Clear blacklist — symbols rejected during farm blip are now reachable
+            if self._blacklisted:
+                cleared = list(self._blacklisted.keys())
+                self._blacklisted.clear()
+                logger.info(
+                    "Farm reconnected — cleared blacklist for %s", ", ".join(cleared),
+                )
+            return
+
         symbol = getattr(contract, "symbol", "").upper() if contract else ""
         if errorCode in self._TICK_BY_TICK_ERRORS:
             if symbol:
@@ -280,6 +303,24 @@ class IBMarketDataSource:
             return
         if not symbol or symbol not in self._contracts:
             return
+
+        # If this error arrived within the grace window of a farm reconnect,
+        # treat it as transient: drop the subscription so the main loop
+        # re-subscribes on the next cycle, but do NOT blacklist.
+        now_mono = time.monotonic()
+        since_farm = min(
+            now_mono - self._last_farm_ok_ts,
+            now_mono - self._last_farm_blip_ts,
+        )
+        if since_farm < self._FARM_RECONNECT_GRACE_S:
+            logger.info(
+                "Transient market-data error for %s (code %d) during farm reconnect "
+                "(%.1fs ago) — will retry next cycle: %s",
+                symbol, errorCode, since_farm, errorString,
+            )
+            self._remove_symbol(symbol)
+            return
+
         logger.warning(
             "Market data permission denied for %s (code %d), blacklisting for 1h: %s",
             symbol, errorCode, errorString,
