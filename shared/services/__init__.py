@@ -1,5 +1,6 @@
 """Shared services."""
 from .deployment import (
+    ALCB_ALLOCATION_ENV,
     DEPLOY_MODE_ENV,
     IARIC_ALLOCATION_ENV,
     PAPER_CAPITAL_ENV,
@@ -16,6 +17,7 @@ __all__ = [
     "DEPLOY_MODE_ENV",
     "DeploymentConfigError",
     "HeartbeatService",
+    "ALCB_ALLOCATION_ENV",
     "IARIC_ALLOCATION_ENV",
     "PAPER_CAPITAL_ENV",
     "StrategyCapitalAllocation",

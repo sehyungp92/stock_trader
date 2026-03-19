@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import datetime
+from datetime import datetime, time, timezone
 from typing import Iterable, Sequence
 
 
@@ -57,6 +57,26 @@ def _bars_to_ohlcv(bars: Iterable, *, use_ts: bool = False) -> list[list[float]]
         ts = getattr(bar, "ts", None) if use_ts else getattr(bar, "start_time", None)
         if ts is None:
             continue
+        rows.append(
+            [
+                _to_ms(ts),
+                float(bar.open),
+                float(bar.high),
+                float(bar.low),
+                float(bar.close),
+                float(getattr(bar, "volume", 0.0)),
+            ]
+        )
+    return rows
+
+
+def _daily_bars_to_ohlcv(bars: Iterable) -> list[list[float]]:
+    rows: list[list[float]] = []
+    for bar in bars:
+        trade_date = getattr(bar, "trade_date", None)
+        if trade_date is None:
+            continue
+        ts = datetime.combine(trade_date, time(9, 30), tzinfo=timezone.utc)
         rows.append(
             [
                 _to_ms(ts),
@@ -137,6 +157,64 @@ class IARICInstrumentationDataProvider:
             rows = _bars_to_ohlcv(market.bars_30m)
         elif timeframe == "1h":
             rows = _aggregate_bars(list(market.bars_30m), timeframe_minutes=2)
+        else:
+            rows = []
+
+        return _limit_rows(_filter_since(rows, since), limit)
+
+
+class ALCBInstrumentationDataProvider:
+    """Expose ALCB live state through the instrumentation data-provider contract."""
+
+    def __init__(self, engine) -> None:
+        self._engine = engine
+
+    def get_bid_ask(self, symbol: str) -> tuple[float, float]:
+        market = self._engine._markets.get(symbol)  # noqa: SLF001
+        if market is None:
+            return 0.0, 0.0
+        return float(market.bid or 0.0), float(market.ask or 0.0)
+
+    def get_last_price(self, symbol: str) -> float:
+        market = self._engine._markets.get(symbol)  # noqa: SLF001
+        if market is None or market.last_price is None:
+            return 0.0
+        return float(market.last_price)
+
+    def get_atr(self, symbol: str) -> float | None:
+        daily_rows = self.get_ohlcv(symbol, timeframe="1d", limit=30)
+        atr = _atr_from_ohlcv(daily_rows)
+        if atr is not None:
+            return atr
+        item = self._engine._items.get(symbol)  # noqa: SLF001
+        if item is None:
+            return None
+        return float(getattr(item, "intraday_atr_seed", 0.0) or 0.0)
+
+    def get_ohlcv(
+        self,
+        symbol: str,
+        *,
+        timeframe: str = "4h",
+        limit: int = 120,
+        since: int | None = None,
+    ) -> list[list[float]]:
+        market = self._engine._markets.get(symbol)  # noqa: SLF001
+        if market is None:
+            return []
+
+        if timeframe == "1m":
+            rows = _bars_to_ohlcv(market.minute_bars)
+        elif timeframe == "5m":
+            rows = _aggregate_bars(list(market.minute_bars), timeframe_minutes=5)
+        elif timeframe == "30m":
+            rows = _bars_to_ohlcv(market.bars_30m)
+        elif timeframe == "1h":
+            rows = _aggregate_bars(list(market.bars_30m), timeframe_minutes=2)
+        elif timeframe == "4h":
+            rows = _bars_to_ohlcv(market.bars_4h)
+        elif timeframe == "1d":
+            rows = _daily_bars_to_ohlcv(market.daily_bars)
         else:
             rows = []
 

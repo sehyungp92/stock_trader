@@ -14,12 +14,14 @@ logger = logging.getLogger(__name__)
 DEPLOY_MODE_ENV = "STOCK_TRADER_DEPLOY_MODE"
 IARIC_ALLOCATION_ENV = "STOCK_TRADER_CAPITAL_ALLOCATION_IARIC_PCT"
 US_ORB_ALLOCATION_ENV = "STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT"
+ALCB_ALLOCATION_ENV = "STOCK_TRADER_CAPITAL_ALLOCATION_ALCB_PCT"
 PAPER_CAPITAL_ENV = "STOCK_TRADER_PAPER_CAPITAL"
 
-_VALID_DEPLOY_MODES = ("both", "iaric", "us_orb")
+_VALID_DEPLOY_MODES = ("both", "iaric", "us_orb", "alcb")
 _STRATEGY_TO_MODE = {
     "IARIC_v1": "iaric",
     "US_ORB_v1": "us_orb",
+    "ALCB_v1": "alcb",
 }
 _MODE_TO_STRATEGY = {mode: strategy for strategy, mode in _STRATEGY_TO_MODE.items()}
 
@@ -177,16 +179,22 @@ def resolve_strategy_capital_allocation(strategy_id: str, raw_nav: float) -> Str
     deploy_mode = _parse_deploy_mode()
     nav_value = float(raw_nav)
 
-    # --- Strategy-level split (IARIC / US_ORB) ---
+    # --- Strategy-level split (IARIC / US_ORB / ALCB) ---
     if deploy_mode == "both":
-        iaric_pct = _parse_positive_pct(IARIC_ALLOCATION_ENV, 50.0)
-        us_orb_pct = _parse_positive_pct(US_ORB_ALLOCATION_ENV, 50.0)
-        total_pct = iaric_pct + us_orb_pct
+        iaric_pct = _parse_positive_pct(IARIC_ALLOCATION_ENV, 100.0 / 3.0)
+        us_orb_pct = _parse_positive_pct(US_ORB_ALLOCATION_ENV, 100.0 / 3.0)
+        alcb_pct = _parse_positive_pct(ALCB_ALLOCATION_ENV, 100.0 / 3.0)
+        total_pct = iaric_pct + us_orb_pct + alcb_pct
         if not math.isclose(total_pct, 100.0, rel_tol=0.0, abs_tol=1e-6):
             raise DeploymentConfigError(
-                f"{IARIC_ALLOCATION_ENV} + {US_ORB_ALLOCATION_ENV} must equal 100; got {total_pct:.6f}"
+                f"{IARIC_ALLOCATION_ENV} + {US_ORB_ALLOCATION_ENV} + {ALCB_ALLOCATION_ENV} must equal 100; got {total_pct:.6f}"
             )
-        capital_fraction = (iaric_pct / 100.0) if strategy_mode == "iaric" else (us_orb_pct / 100.0)
+        allocations = {
+            "iaric": iaric_pct / 100.0,
+            "us_orb": us_orb_pct / 100.0,
+            "alcb": alcb_pct / 100.0,
+        }
+        capital_fraction = allocations[strategy_mode]
         enabled = True
     else:
         enabled = strategy_mode == deploy_mode

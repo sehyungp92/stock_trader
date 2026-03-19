@@ -32,13 +32,16 @@ logger = logging.getLogger("instrumentation.bootstrap")
 _STRATEGY_CONFIG_MODULES = {
     "IARIC_v1": ["strategy_iaric.config"],
     "US_ORB_v1": ["strategy_orb.config"],
+    "ALCB_v1": ["strategy_alcb.config"],
     "strategy_iaric": ["strategy_iaric.config"],
     "strategy_orb": ["strategy_orb.config"],
+    "strategy_alcb": ["strategy_alcb.config"],
 }
 
 _BOT_NAME_MAP = {
     "IARIC_v1": "IARIC v1",
     "US_ORB_v1": "US ORB v1",
+    "ALCB_v1": "ALCB v1",
 }
 
 # Single bot_id for all strategies; strategy_id distinguishes them in events
@@ -47,6 +50,7 @@ _HMAC_SECRET_ENV = "INSTRUMENTATION_HMAC_SECRET"
 _STRATEGY_ID_MAP = {
     "IARIC_v1": "iaric",
     "US_ORB_v1": "us_orb",
+    "ALCB_v1": "alcb",
 }
 
 

@@ -138,7 +138,8 @@ def test_bootstrap_runtime_uses_allocated_nav_in_combined_mode(monkeypatch):
     _install_runtime_patches(monkeypatch, captured, nav=100_000.0)
     monkeypatch.setenv("STOCK_TRADER_DEPLOY_MODE", "both")
     monkeypatch.setenv("STOCK_TRADER_CAPITAL_ALLOCATION_IARIC_PCT", "50")
-    monkeypatch.setenv("STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT", "50")
+    monkeypatch.setenv("STOCK_TRADER_CAPITAL_ALLOCATION_US_ORB_PCT", "25")
+    monkeypatch.setenv("STOCK_TRADER_CAPITAL_ALLOCATION_ALCB_PCT", "25")
 
     services = asyncio.run(iaric_session.bootstrap_runtime("config", settings=StrategySettings()))
 

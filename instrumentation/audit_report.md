@@ -3,7 +3,7 @@
 ## Bot identity
 
 - Bot family: `stock_trader`
-- Relay bot IDs: `IARIC_v1`, `US_ORB_v1`
+- Relay bot IDs: `IARIC_v1`, `US_ORB_v1`, `ALCB_v1`
 - Venue: IBKR U.S. equities
 - Shared infrastructure: PostgreSQL, dashboard, and relay provided by `_references/swing_trader`
 - Architecture: hybrid event-driven plus async polling
@@ -45,12 +45,31 @@
   - heartbeat emission from `strategy_orb/main.py`
   - indicator snapshots at candidate selection and ready-to-submit decision points
 
+### `ALCB_v1`
+
+- Runtime entrypoint: `python -m strategy_alcb`
+- Core engine: `strategy_alcb/engine.py`
+- Entry decision flow:
+  - campaign-state and regime gating in `ALCBEngine._advance_symbol()`
+  - final order submission in `ALCBEngine._submit_entry()`
+- Exit flow:
+  - stop/target/add management in `ALCBEngine._manage_position()`
+  - fill handling in `ALCBEngine._handle_fill()`
+- Instrumentation hooks now active:
+  - bridged entry and exit logging through `instrumentation/src/pg_bridge.py`
+  - missed-opportunity logging on entry gates, portfolio caps, friction blocks, and entry terminal events
+  - order lifecycle logging on submit, replace, cancel, and OMS fill/status events
+  - structured engine error logging for OMS submission failures
+  - indicator snapshots at the intraday-evidence decision point
+  - assistant-facing 5 minute and 1 hour OHLCV provider support for trade/missed backfills
+
 ## Shared instrumentation runtime
 
 - Bootstrap and sidecar lifecycle: `instrumentation/src/bootstrap.py`
 - PG-first recorder bridge: `instrumentation/src/pg_bridge.py`
 - Strategy data providers:
   - `IARICInstrumentationDataProvider`
+  - `ALCBInstrumentationDataProvider`
   - `USORBInstrumentationDataProvider`
 - Standardized relay-facing artifacts:
   - trades

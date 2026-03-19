@@ -147,6 +147,45 @@ async def test_record_entry_falls_back_to_direct_instrumentation_without_pg():
 
 
 @pytest.mark.asyncio
+async def test_record_entry_forwards_stock_trader_context_fields():
+    kit = MagicMock()
+    recorder = InstrumentedTradeRecorder(
+        None,
+        kit,
+        strategy_id="ALCB_v1",
+        strategy_type="strategy_alcb",
+    )
+    entry_ts = datetime.now(timezone.utc)
+
+    await recorder.record_entry(
+        strategy_id="ALCB_v1",
+        instrument="AAPL",
+        direction="LONG",
+        quantity=7,
+        entry_price=Decimal("101.50"),
+        entry_ts=entry_ts,
+        meta={
+            "entry_signal": "A_AVWAP_RETEST",
+            "concurrent_positions": 2,
+            "drawdown_pct": -1.5,
+            "bar_id": "AAPL:20260319T143000",
+            "entry_latency_ms": 450,
+            "execution_timestamps": {
+                "order_submitted_at": entry_ts.isoformat(),
+                "fill_received_at": entry_ts.isoformat(),
+            },
+        },
+    )
+
+    kwargs = kit.log_entry.call_args.kwargs
+    assert kwargs["concurrent_positions"] == 2
+    assert kwargs["drawdown_pct"] == -1.5
+    assert kwargs["bar_id"] == "AAPL:20260319T143000"
+    assert kwargs["entry_latency_ms"] == 450
+    assert kwargs["execution_timestamps"]["order_submitted_at"] == entry_ts.isoformat()
+
+
+@pytest.mark.asyncio
 async def test_record_exit_falls_back_to_direct_instrumentation_without_pg():
     kit = MagicMock()
     recorder = InstrumentedTradeRecorder(
@@ -166,3 +205,27 @@ async def test_record_exit_falls_back_to_direct_instrumentation_without_pg():
 
     kit.log_exit.assert_called_once()
     assert kit.log_exit.call_args.kwargs["trade_id"] == "fallback_trade"
+
+
+@pytest.mark.asyncio
+async def test_record_exit_forwards_exit_latency():
+    kit = MagicMock()
+    recorder = InstrumentedTradeRecorder(
+        None,
+        kit,
+        strategy_id="ALCB_v1",
+        strategy_type="strategy_alcb",
+    )
+
+    await recorder.record_exit(
+        trade_id="trade-123",
+        exit_price=Decimal("99.50"),
+        exit_ts=datetime.now(timezone.utc),
+        exit_reason="STOP",
+        realized_r=Decimal("-1.0"),
+        meta={"exit_latency_ms": 900, "fees_paid": 2.25},
+    )
+
+    kwargs = kit.log_exit.call_args.kwargs
+    assert kwargs["exit_latency_ms"] == 900
+    assert kwargs["fees_paid"] == 2.25

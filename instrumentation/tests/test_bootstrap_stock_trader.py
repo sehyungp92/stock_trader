@@ -32,6 +32,16 @@ def test_load_config_applies_stock_trader_defaults():
     assert config["sidecar"]["hmac_secret_env"] == "INSTRUMENTATION_HMAC_SECRET"
 
 
+def test_load_config_applies_alcb_strategy_identity():
+    config = _load_config("ALCB_v1", "strategy_alcb")
+
+    assert config["bot_id"] == "stock_trader"
+    assert config["strategy_id"] == "alcb"
+    assert config["strategy_type"] == "strategy_alcb"
+    assert config["data_source_id"] == "ibkr_us_equities"
+    assert config["sidecar"]["hmac_secret_env"] == "INSTRUMENTATION_HMAC_SECRET"
+
+
 def test_manager_maps_config_modules_and_attachs_provider():
     manager = InstrumentationManager(
         oms=_DummyOMS(),
@@ -49,6 +59,19 @@ def test_manager_maps_config_modules_and_attachs_provider():
     assert manager.snapshot_service._data_provider is provider
     assert manager.regime_classifier.data_provider is provider
     assert manager.config["sidecar"]["hmac_secret_env"] == "INSTRUMENTATION_HMAC_SECRET"
+
+
+def test_manager_maps_alcb_config_module():
+    manager = InstrumentationManager(
+        oms=_DummyOMS(),
+        strategy_id="ALCB_v1",
+        strategy_type="strategy_alcb",
+    )
+
+    assert manager.bot_id == "stock_trader"
+    assert manager.config["strategy_id"] == "alcb"
+    assert manager.config_watcher is not None
+    assert manager.config_watcher._config_modules == ["strategy_alcb.config"]
 
 
 def test_periodic_loop_runs_trade_and_missed_backfills():
