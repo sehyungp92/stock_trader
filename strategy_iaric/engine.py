@@ -1075,8 +1075,10 @@ class IARICEngine:
                 self._request_full_exit(symbol, "forced_flatten")
 
     async def _handle_event(self, event) -> None:
-        if event.event_type in (OMSEventType.FILL, OMSEventType.ORDER_FILLED):
+        if event.event_type == OMSEventType.FILL:
             await self._handle_fill(event)
+        elif event.event_type == OMSEventType.ORDER_FILLED:
+            pass  # order-state notification; real execution data comes via FILL
         elif event.event_type == OMSEventType.RISK_HALT:
             await self._handle_risk_halt((event.payload or {}).get("reason", ""))
         elif event.event_type in (OMSEventType.ORDER_CANCELLED, OMSEventType.ORDER_EXPIRED, OMSEventType.ORDER_REJECTED):

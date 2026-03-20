@@ -46,7 +46,7 @@ class RuntimeServices:
         return self.allocated_nav
 
 
-async def fetch_nav(session: IBSession, default_nav: float = 100_000.0) -> float:
+async def fetch_nav(session: IBSession, account_id: str = "", default_nav: float = 100_000.0) -> float:
     environment = get_environment()
 
     def _fallback_or_raise(reason: str, exc: Exception | None = None) -> float:
@@ -73,8 +73,13 @@ async def fetch_nav(session: IBSession, default_nav: float = 100_000.0) -> float
     if not accounts:
         return _fallback_or_raise("no managed accounts were returned")
 
+    target = account_id if account_id and account_id in accounts else accounts[0]
+    if account_id and account_id not in accounts:
+        logger.warning("configured account_id %s not in managedAccounts %s — falling back to %s",
+                        account_id, accounts, target)
+
     try:
-        summary = await session.ib.accountSummaryAsync(accounts[0])
+        summary = await session.ib.accountSummaryAsync(target)
     except Exception as exc:
         return _fallback_or_raise("accountSummaryAsync() failed", exc)
 
@@ -110,7 +115,7 @@ async def bootstrap_runtime(
     )
 
     bootstrap = await bootstrap_database()
-    raw_nav = await fetch_nav(session)
+    raw_nav = await fetch_nav(session, account_id=config.profile.account_id)
     effective_nav = resolve_paper_nav(raw_nav, Path("data/strategy_orb/paper_capital_state.json"))
     capital_allocation = resolve_strategy_capital_allocation(STRATEGY_ID, raw_nav=effective_nav)
     capital_allocation.assert_enabled()

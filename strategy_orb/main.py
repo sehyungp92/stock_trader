@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 import signal
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 from instrumentation.src.strategy_data_providers import USORBInstrumentationDataProvider
@@ -22,8 +22,11 @@ from .universe_builder import LiveUniverseBuilder
 logger = logging.getLogger(__name__)
 
 
-async def main() -> None:
-    settings = StrategySettings()
+async def run_intraday_session(
+    trading_date: date | None = None,
+    settings: StrategySettings | None = None,
+) -> None:
+    settings = settings or StrategySettings()
     config_dir = Path(__file__).resolve().parents[1] / "config"
     services = await bootstrap_runtime(config_dir=config_dir, settings=settings)
     cache: dict = {}
@@ -73,6 +76,7 @@ async def main() -> None:
 
     services.session.set_reconnect_callback(_on_reconnect)
     stop_event = asyncio.Event()
+    session_date = trading_date or datetime.now(ET).date()
     started_at = datetime.now(timezone.utc)
 
     def _record_runtime_error(error_type: str, exc: Exception, *, severity: str = "medium") -> None:
@@ -88,7 +92,13 @@ async def main() -> None:
         )
 
     async def scanner_loop() -> None:
-        while True:
+        while not stop_event.is_set():
+            now_et = datetime.now(ET)
+            if now_et.date() != session_date or now_et.time() >= time(16, 1):
+                logger.info("Date boundary reached — ending ORB session")
+                stop_event.set()
+                break
+            await services.session.wait_until_ready()
             try:
                 symbols = await asyncio.wait_for(scanner.next_update(), timeout=5.0)
                 builder.resolve_batch(symbols)
@@ -195,7 +205,13 @@ async def main() -> None:
         scanner_task = asyncio.create_task(scanner_loop())
         heartbeat_task = asyncio.create_task(heartbeat_loop())
 
-        await stop_event.wait()
+        while not stop_event.is_set():
+            now_et = datetime.now(ET)
+            if now_et.date() != session_date or now_et.time() >= time(16, 1):
+                logger.info("Session date boundary — shutting down")
+                stop_event.set()
+                break
+            await asyncio.sleep(5)
     finally:
         if scanner_task is not None:
             scanner_task.cancel()
@@ -209,6 +225,22 @@ async def main() -> None:
         await market_data.stop()
         await engine.stop()
         await shutdown_runtime(services)
+
+
+async def main() -> None:
+    settings = StrategySettings()
+    logger.info("ORB strategy started — scanner %s, entry %s–%s, flatten %s ET",
+                settings.scanner_start, settings.entry_start,
+                settings.entry_end, settings.forced_flatten)
+    while True:
+        now = datetime.now(ET)
+        today = now.date()
+        try:
+            if settings.scanner_start <= now.time() < time(16, 1):
+                await run_intraday_session(trading_date=today, settings=settings)
+        except Exception:
+            logger.exception("ORB main loop failed")
+        await asyncio.sleep(5)
 
 
 def run() -> None:

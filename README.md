@@ -4,9 +4,9 @@ Automated U.S. equity trading stack running three live strategies through Intera
 
 ## Strategies
 
-- `IARIC_v1`: all-day intraday accumulation-reversal strategy.
-- `US_ORB_v1`: opening-range breakout strategy for the early session.
-- `ALCB_v1`: AVWAP Leader Compression Breakout campaign strategy with nightly selection, 30m execution, multi-day management, long/short support, and OMS-managed stops/partials/adds.
+- `IARIC`: all-day intraday accumulation-reversal strategy. IARIC looks to detect institutional accumulation near AVWAP-band discount via tick/volume sponsorship signals and bid/ask micropressure, then requires consecutive 5m closes above the reclaim level before entering — fading noise while riding confirmed institutional flow.
+- `US_ORB`: opening-range breakout strategy for the early session. US_ORB captures the post-open price discovery window (9:35-9:50 AM) in high-volume-surge names, entering breakouts only when sustained volume acceptance and broad market breadth confirm directional conviction — exploiting the opening range as a reliable intraday support/resistance anchor.
+- `ALCB`: AVWAP Leader Compression Breakout campaign strategy with nightly selection, 30m execution, multi-day management, long/short support, and OMS-managed stops/partials/adds. ALCB targets liquid leaders with strong higher-timeframe sponsorship that compress into tight daily structure, then enters on ATR-normalised displacement breakouts confirmed by intraday AVWAP reclaim — capturing the expansion phase that follows institutional accumulation in trending names.
 
 ## Structure
 

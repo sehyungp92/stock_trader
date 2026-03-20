@@ -178,6 +178,10 @@ async def run_intraday_session(
                 stop_event.set()
                 continue
             try:
+                await asyncio.wait_for(services.session.wait_until_ready(), timeout=30.0)
+            except asyncio.TimeoutError:
+                continue
+            try:
                 await market_data.ensure_hot_symbols(engine.subscription_instruments())
                 await market_data.poll_due_bars(engine.polling_instruments(), now=now)
             except Exception as exc:

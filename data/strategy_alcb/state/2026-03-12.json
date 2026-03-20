@@ -468,7 +468,7 @@
       "AAPL"
     ]
   },
-  "saved_at": "2026-03-19T15:43:03.442317+00:00",
+  "saved_at": "2026-03-19T23:04:36.472259+00:00",
   "symbols": [
     {
       "campaign": {
@@ -546,9 +546,9 @@
         "direction": "LONG",
         "entry_commission": 0.30000000000000004,
         "entry_price": 100.0921568627451,
-        "entry_time": "2026-03-19T15:43:02.831408+00:00",
+        "entry_time": "2026-03-19T23:04:35.861938+00:00",
         "exit_commission": 0.0,
-        "exit_oca_group": "ALCB-AAPL-EXIT-1b5828965534",
+        "exit_oca_group": "ALCB-AAPL-EXIT-b6271d1b96b5",
         "final_stop": 94.83571428571429,
         "initial_risk_per_share": 5.164285714285711,
         "max_adverse_price": 100.0,
@@ -561,11 +561,11 @@
         "realized_pnl_usd": 0.0,
         "setup_tag": "A_AVWAP_RETEST",
         "stale_warning_emitted": false,
-        "stop_order_id": "73bd7083-351b-4a3c-8c94-bff7738430d3",
-        "stop_submitted_at": "2026-03-19T15:43:03.126907+00:00",
-        "tp1_order_id": "1001b5ee-e1b4-43b1-95c5-7abbe241a507",
+        "stop_order_id": "ebfe254a-c332-4176-87c2-f909251cf4c6",
+        "stop_submitted_at": "2026-03-19T23:04:36.157419+00:00",
+        "tp1_order_id": "e77282bc-65d0-4464-8102-ae1a1ba41782",
         "tp1_price": 106.37380952380954,
-        "tp2_order_id": "617b3c87-8c93-4ba0-9435-bd70ff3dab47",
+        "tp2_order_id": "aa8ed23c-4ec8-45d2-92cd-7cf756f853a6",
         "tp2_price": 115.02738095238098,
         "tp2_taken": false,
         "trade_id": ""
@@ -577,7 +577,7 @@
         "entry_type": null,
         "filled_qty": 0,
         "limit_price": null,
-        "oms_order_id": "73bd7083-351b-4a3c-8c94-bff7738430d3",
+        "oms_order_id": "ebfe254a-c332-4176-87c2-f909251cf4c6",
         "planned_stop_price": null,
         "planned_tp1_price": null,
         "planned_tp2_price": null,
@@ -586,7 +586,7 @@
         "risk_per_share": null,
         "role": "STOP",
         "stop_price": 94.83571428571429,
-        "submitted_at": "2026-03-19T15:43:03.126907+00:00"
+        "submitted_at": "2026-03-19T23:04:36.157419+00:00"
       },
       "symbol": "AAPL",
       "tp1_order": {
@@ -596,7 +596,7 @@
         "entry_type": null,
         "filled_qty": 0,
         "limit_price": 106.37380952380954,
-        "oms_order_id": "1001b5ee-e1b4-43b1-95c5-7abbe241a507",
+        "oms_order_id": "e77282bc-65d0-4464-8102-ae1a1ba41782",
         "planned_stop_price": null,
         "planned_tp1_price": null,
         "planned_tp2_price": null,
@@ -605,7 +605,7 @@
         "risk_per_share": null,
         "role": "TP",
         "stop_price": null,
-        "submitted_at": "2026-03-19T15:43:03.127912+00:00"
+        "submitted_at": "2026-03-19T23:04:36.157419+00:00"
       },
       "tp2_order": {
         "cancel_requested": false,
@@ -614,7 +614,7 @@
         "entry_type": null,
         "filled_qty": 0,
         "limit_price": 115.02738095238098,
-        "oms_order_id": "617b3c87-8c93-4ba0-9435-bd70ff3dab47",
+        "oms_order_id": "aa8ed23c-4ec8-45d2-92cd-7cf756f853a6",
         "planned_stop_price": null,
         "planned_tp1_price": null,
         "planned_tp2_price": null,
@@ -623,7 +623,7 @@
         "risk_per_share": null,
         "role": "TP",
         "stop_price": null,
-        "submitted_at": "2026-03-19T15:43:03.127912+00:00"
+        "submitted_at": "2026-03-19T23:04:36.157419+00:00"
       }
     }
   ],

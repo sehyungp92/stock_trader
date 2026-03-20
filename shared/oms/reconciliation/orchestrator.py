@@ -1,5 +1,6 @@
 """Reconciliation orchestrator."""
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from ...ibkr_core.reconciler.sync import ReconcilerSync, Discrepancy
@@ -30,6 +31,18 @@ class ReconciliationOrchestrator:
         self._halt_trading = halt_trading
         self._policy = DiscrepancyPolicy()
         self._reconciler = ReconcilerSync(self._policy)
+
+    async def _build_oms_position_map(self) -> dict[int, float]:
+        """Build con_id -> net_qty map from OMS positions, aggregating across strategies."""
+        oms_positions = await self._repo.get_all_positions()
+        oms_position_map: dict[int, float] = defaultdict(float)
+        broker_contracts = self._adapter.cache.contracts
+        for pos in oms_positions:
+            for con_id, spec in broker_contracts.items():
+                if spec.symbol == pos.instrument_symbol:
+                    oms_position_map[con_id] += pos.net_qty
+                    break
+        return oms_position_map
 
     async def startup_reconciliation(self) -> None:
         """MANDATORY: run before accepting any intents.
@@ -72,15 +85,7 @@ class ReconciliationOrchestrator:
         )
 
         # Gather OMS position quantities by con_id
-        oms_positions = await self._repo.get_all_positions()
-        oms_position_map: dict[int, float] = {}
-        for pos in oms_positions:
-            # Map instrument symbol to con_id via adapter cache
-            broker_info = self._adapter.cache.contracts
-            for con_id, spec in broker_info.items():
-                if spec.symbol == pos.instrument_symbol:
-                    oms_position_map[con_id] = pos.net_qty
-                    break
+        oms_position_map = await self._build_oms_position_map()
 
         # Reconcile positions
         position_discrepancies = self._reconciler.reconcile_positions(
@@ -165,9 +170,16 @@ class ReconciliationOrchestrator:
             broker_orders, oms_working_broker_ids, our_client_id_pattern=""
         )
 
-        if order_discrepancies:
-            logger.warning(f"Periodic recon: {len(order_discrepancies)} order discrepancies")
-            await self._apply_discrepancies(order_discrepancies)
+        oms_position_map = await self._build_oms_position_map()
+        position_discrepancies = self._reconciler.reconcile_positions(
+            broker_positions, oms_position_map
+        )
+
+        all_discrepancies = order_discrepancies + position_discrepancies
+
+        if all_discrepancies:
+            logger.warning(f"Periodic recon: {len(all_discrepancies)} discrepancies ({len(order_discrepancies)} order, {len(position_discrepancies)} position)")
+            await self._apply_discrepancies(all_discrepancies)
         else:
             logger.debug(
                 f"Periodic recon: {len(broker_orders)} orders, "

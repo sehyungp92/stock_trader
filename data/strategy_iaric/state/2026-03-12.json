@@ -5,7 +5,7 @@
       "AAPL"
     ]
   },
-  "saved_at": "2026-03-14T14:48:15.508139+00:00",
+  "saved_at": "2026-03-19T23:04:35.477040+00:00",
   "symbols": [
     {
       "acceptance_count": 0,
@@ -18,11 +18,11 @@
       "exit_order": {
         "cancel_requested": false,
         "limit_price": 100.8,
-        "oms_order_id": "d0d71da1-2080-43f2-9b5d-d0803e4aa95a",
+        "oms_order_id": "9d13bc87-b767-4fa0-a09a-a212f0a253d4",
         "requested_qty": 100,
         "role": "EXIT",
         "stop_price": null,
-        "submitted_at": "2026-03-14T14:48:15.198310+00:00"
+        "submitted_at": "2026-03-19T23:04:35.167857+00:00"
       },
       "expected_volume_pct": 0.0,
       "flowproxy_signal": "UNAVAILABLE",
@@ -38,6 +38,7 @@
       "pending_hard_exit": false,
       "position": {
         "current_stop": 99.5,
+        "entry_commission": 0.0,
         "entry_price": 101.0,
         "entry_time": "2026-03-12T13:35:00+00:00",
         "final_stop": 99.5,
